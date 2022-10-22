@@ -1,16 +1,15 @@
-# This is a sample Python script.
+import pandas as pd
+from intelligent_placer_lib import loading
+from intelligent_placer_lib import intelligent_placer
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
-
-
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
-
-
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    print_hi('PyCharm')
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    test_images_path = 'images/input/'
+    test_images = loading.load_images_from_folder(test_images_path)
+    df = pd.read_csv('images/input/ExpectedResultsWithDescr.csv', delimiter=',', encoding="windows-1251")
+    correct_cnt = 0
+    for i, (image, im_name) in enumerate(test_images):
+        expected_result = df.query(f'Name == \'{im_name}\'').iloc[0]['ExpectedResult']
+        result = intelligent_placer.check_image(test_images_path + im_name)
+        correct_cnt += (result == expected_result)
+        print(f'{im_name}: Результат = {result}, Ожидаемый результат = {bool(expected_result)}')
+    print(f'Правильных: {correct_cnt}\nВсего тестов: {len(test_images)}\nПроцент правильных ответов: {correct_cnt / len(test_images) * 100}%')
