@@ -2,15 +2,14 @@ import cv2
 import numpy as np
 from skimage.feature import canny
 
-
-def get_edges(image):
+def get_edges(image : np.ndarray) -> np.ndarray:
     img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     img = cv2.GaussianBlur(img, (3, 3), cv2.BORDER_DEFAULT)
     img = canny(img).astype(np.uint8)
     return img
 
 
-def preprocess_polygon(image):
+def preprocess_polygon(image : np.ndarray) -> np.ndarray:
     img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     img = cv2.GaussianBlur(img, (3, 3), cv2.BORDER_DEFAULT)
     img = canny(img).astype(np.uint8)
@@ -20,7 +19,7 @@ def preprocess_polygon(image):
     return img
 
 
-def preprocess_things(image):
+def preprocess_things(image : np.ndarray) -> np.ndarray:
     img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     img = cv2.GaussianBlur(img, (3, 3), cv2.BORDER_DEFAULT)
     img = canny(img).astype(np.uint8)
@@ -33,7 +32,7 @@ def preprocess_things(image):
 
 
  # находим нижнюю границу листа, чтобы в дальнейшем разбить изображение на две половины
-def get_paper_line(image):
+def get_paper_line(image : np.ndarray) -> int:
     img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     img = cv2.GaussianBlur(img, (3, 3), cv2.BORDER_DEFAULT)
     img = canny(img).astype(np.uint8)

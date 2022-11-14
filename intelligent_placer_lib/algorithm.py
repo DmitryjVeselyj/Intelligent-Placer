@@ -1,211 +1,89 @@
-import numpy as np
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, MultiPolygon
 from shapely.affinity import rotate, translate
-from typing import Tuple
 from matplotlib import pyplot as plt
-import random
-from scipy.optimize import fmin
 from scipy.spatial.distance import euclidean
 from itertools import product
-from copy import deepcopy
+import scipy.optimize
+
+N_ITER = 10 # число итераций основного алгоритма "just_an_algorithm".
+MAX_DISTANCE_TO_BORDER = 30 # Используется для подсчёта числа точек, близких к границе
+TOLERANCE = 1 # Погрешность площади (см "just_an_algorithm")
 
 
-POPULATION_SIZE = 100
-P_CROSSOVER = 0.6       
-P_MUTATION = 0.00005       
-MAX_GENERATIONS = 50
+def distance_between_contours(polygon: Polygon | MultiPolygon, thing: Polygon) -> list[float]:
+    if type(polygon) == Polygon:
+        points_first = [*zip(*polygon.exterior.coords.xy)]
+    else:
+        points_first = []
+        for poly in list(polygon.geoms):
+            points_first += [*zip(*poly.exterior.coords.xy)]
 
-
-def the_best_algorithm_in_the_world(polygon: Polygon, things: Tuple[Polygon]) -> bool:
-    if polygon.is_empty or len(things) == 0:
-        return False
-    if polygon.area < sum([obj.area for obj in things]):
-        return False
-
-    tmp_polygon = Polygon(polygon)
-
-    for thing in things:
-        rot, xoff, yoff, fopt = genetic_alg(tmp_polygon, thing)
-        if fopt == -np.inf:
-            return False
-       
-        tmp_thing = rotate(translate(thing, xoff=xoff, yoff=yoff), rot)
-        tmp_polygon = tmp_polygon.difference(tmp_thing)
-    return True
-
-"""
-Дальше вы можете увидеть разбросанные функции, не приведённые к особо читабельному виду.
-Некоторые строчки кода можно упростить, переписать более нормальным образом. Но по времени уже близился дедлайн, поэтому оставил всё, как есть
-Большая часть того, что вы можете лицезреть, вероятнее всего, будет изменена координально.
-"""
-
-def distance_between_contours(polygon, thing):
-    points_first = [*zip(*polygon.exterior.coords.xy)]
     points_second = [*zip(*thing.exterior.coords.xy)]
     crosses = list(product(points_first, points_second))
-    distanses = list(euclidean(points[0], points[1]) for points in crosses)
-    return distanses
+    distances = [euclidean(points[0], points[1]) for points in crosses]
+    return distances
 
 
-def cnt_points(individual, value):
-    cnt = list(filter(lambda x: x < value, individual.distanses))
+def count_points(distances : list[float], value: int) -> int:
+    cnt = list(filter(lambda x: x < value, distances))
     return len(cnt)
 
 
-def get_optimal_off(polygon, thing, rot=0, xoff=0, yoff=0):
-    distanses = []
+def get_begin_position(polygon : Polygon, thing : Polygon) -> tuple[float, float]:
+    thing_xc, thing_yc = thing.centroid.coords.xy
+    poly_xc, poly_yc = polygon.centroid.coords.xy
+    return poly_xc[0] - thing_xc[0], poly_yc[0] - thing_yc[0]
+
+
+def get_optimal_position(polygon : Polygon, thing: Polygon) -> tuple[float, float, float, float]:
     def f(args):
         rot, xoff, yoff = args
-        another = rotate(translate(thing, xoff=xoff, yoff=yoff), rot)
-        if not polygon.contains(another):
-            return np.inf
-        nonlocal distanses
-        distanses = distance_between_contours(polygon.simplify(3), another.simplify(3))    
-        return min(distanses)
-    result = fmin(f, np.array([rot, xoff, yoff]), full_output=True, disp=False)
+        transformed_thing = rotate(translate(thing, xoff=xoff, yoff=yoff), rot)
+        distances = distance_between_contours(polygon, transformed_thing)
+        thing_xc, thing_yc = transformed_thing.centroid.coords.xy
+        poly_xc, poly_yc = polygon.centroid.coords.xy
+        """
+        1. Число точек, находящихся на расстоянии меньше MAX_DISTANCE. Чем больше, тем плотнее к границе
+        2. Пересечение многоугольника и предмета. Сделано, чтобы в результате преобразований оставались внутри многоугольника или хотя бы не отдалялись от него
+        3. Расстояние между центрами многоугольника и предмета. Так я пытался дополнительно усилить уплотнение к границе и заполнять пропуски в многоугольнике
+        """
+        return -count_points(distances, MAX_DISTANCE_TO_BORDER) - polygon.intersection(transformed_thing).area - euclidean((poly_xc[0], poly_yc[0]), (thing_xc[0], thing_yc[0]))
 
-    
-    rot, xoff, yoff = result[0]
-    fopt = result[1]
-    if fopt == np.inf:
-        rot = xoff = yoff=  0
-
-    return rot, xoff, yoff, fopt, distanses
-
-
-class Individual():
-    def __init__(self, params=[0, 0, 0]):
-        self.fitness = 0
-        self.params = params
-        self.begin_params=[]
-        self.distanses = []
-        
-
-
-def clone(value):
-    ind = Individual(value.params[:])
-    ind.fitness = value.fitness
-    ind.begin_params = deepcopy(value.begin_params)
-    ind.distanses = deepcopy(value.distanses)
-    return ind
-
-
-def selection_tournament(population, p_len):
-    offspring = []
-    for n in range(p_len):
-        i1 = i2 = i3 = 0
-        while i1 == i2 or i1 == i3 or i2 == i3:
-            i1, i2, i3 = random.randint(
-                0, p_len-1), random.randint(0, p_len-1), random.randint(0, p_len-1)
-
-        offspring.append(max(
-            [population[i1], population[i2], population[i3]], key=lambda ind: ind.fitness))
-
-    return offspring
-
-
-def individual_creator(polygon, thing):
-    dst = int(polygon.hausdorff_distance(thing))
     minx, miny, maxx, maxy = map(int, polygon.bounds)
-    x0, y0 = thing.centroid.coords.xy
-    cnt = 0
-    x0, y0 = x0[0], y0[0]
-    while True:
-        cnt+=1
-        x1 = random.randint(minx ,maxx)
-        y1 = random.randint(miny, maxy)
+    w = maxx - minx
+    h = maxy - miny
+    result = scipy.optimize.differential_evolution(f, bounds=((0, 360), (-w, w), (-h, h)))
 
-        rot0 = random.randint(0, 359)
-        xoff0 = x1 - x0
-        yoff0 = y1 - y0
-        tmp = rotate(translate(thing, xoff=xoff0, yoff=yoff0), rot0)     
-        if cnt > 50 or polygon.contains(tmp):
-            break
-   
+    rot, xoff, yoff = result.x
+    fopt = result.fun
 
-    thing = rotate(translate(thing, xoff=xoff0, yoff=yoff0), rot0)
-    rot, xoff, yoff, fopt, distanses = get_optimal_off(
-        polygon, thing, 0, 0, 0)
-    
-    individual = Individual([rot, xoff, yoff])
-    individual.begin_params = [rot0, xoff0, yoff0]
-    individual.distanses = distanses
-     
-    return individual
+    return rot, xoff, yoff, fopt
 
 
-def population_creator(polygon, thing, n=0):
-    return [individual_creator(polygon, thing) for i in range(n)]
+def just_an_algorithm(polygon: Polygon, things: tuple[Polygon]) -> bool:
+    if polygon.is_empty or len(things) == 0:
+        return False
+    # if polygon.area < sum([obj.area for obj in things]):
+    #     return False
+    params = []
+    tmp_polygon = Polygon(polygon)
+    x, y = tmp_polygon.exterior.coords.xy #можно убрать. Добавлено, чтобы в юпитерском файле построились графики
+    plt.plot(x, y) # можно убрать
+    flag = True  # Соответственно, если не нужно рисовать графики, можно сделать и без флага. Тогда алгоритм будет быстрее выдавать результат
+    for thing in things:
+        xoff0, yoff0 = get_begin_position(tmp_polygon, thing)
+        tmp_thing = translate(thing, xoff=xoff0, yoff=yoff0)
+        for _ in range(N_ITER):
+            rot, xoff, yoff, fopt = get_optimal_position(tmp_polygon, tmp_thing)
+            params.append([rot, xoff, yoff, fopt])
+        rot, xoff, yoff, fopt = min(params, key=lambda x: x[3])
+        tmp_thing = rotate(translate(tmp_thing, xoff=xoff, yoff=yoff), rot)
+        x, y = tmp_thing.exterior.coords.xy  # можно убрать
+        plt.plot(x, y)  # можно убрать
+        if tmp_thing.difference(tmp_polygon).area > TOLERANCE:
+            flag = False
 
-
-def cx_one_point(child1, child2):
-    s = random.randint(0, 2)
-    child1.params[s:], child2.params[s:] = child2.params[s:], child1.params[s:]
-
-
-def mutate(mutant, polygon, thing, mutation_param=0.01):
-    dst = int(polygon.hausdorff_distance(thing))
-    for indx in range(len(mutant.params)):
-        if random.random() < mutation_param:
-            if indx == 0:
-                mutant.params[indx] = 0
-            elif indx == 1:
-                mutant.params[indx] = 0
-            else:
-                mutant.params[indx] = 0
-                
-
-
-def max_fitness(individual, polygon, thing):
-    rot = individual.params[0]
-    xoff = individual.params[1]
-    yoff = individual.params[2]
-    rot0 ,xoff0, yoff0 = individual.begin_params
-    tmp = rotate(translate(thing, xoff=xoff0, yoff=yoff0), rot0)
-    tmp = rotate(translate(tmp, xoff=xoff, yoff=yoff), rot)   
-    if not polygon.contains(tmp):
-        return -np.inf
-     
-    return cnt_points(individual, 30)
-
-def genetic_alg(polygon: Polygon, thing: Polygon):
-    population = population_creator(polygon, thing, n=POPULATION_SIZE)
-    generation_counter = 0
-
-    fitness_values = [max_fitness(individual, polygon, thing) for individual in population]
-
-    for individual, fitnessValue in zip(population, fitness_values):
-        individual.fitness = fitnessValue
-
-    fitness_values = [individual.fitness for individual in population]
-
-    while generation_counter < MAX_GENERATIONS:
-        generation_counter += 1
-        offspring = selection_tournament(population, len(population))
-
-        offspring = list(map(clone, offspring))
-
-        for child1, child2 in zip(offspring[::2], offspring[1::2]):
-            if random.random() < P_CROSSOVER:
-                cx_one_point(child1, child2)
-
-        for mutant in offspring:
-            if random.random() < P_MUTATION:
-                mutate(mutant, polygon, thing, mutation_param=0.01)
-
-        fresh_fitness_values = [max_fitness(
-            individual, polygon, thing) for individual in offspring]
-        for individual, fitnessValue in zip(offspring, fresh_fitness_values):
-            individual.fitness = fitnessValue
-
-        population[:] = offspring
-
-        fitness_values = [ind.fitness for ind in population]
-
-        best_index = fitness_values.index(max(fitness_values))
-        print("Лучший индивидуум = ", max(fitness_values),
-              *population[best_index].params, "\n")
-    rot, xoff, yoff = population[best_index].params
-    rot0, xoff0, yoff0 = population[best_index].begin_params
-    
-    return  rot + rot0, xoff + xoff0, yoff + yoff0,  population[best_index].fitness
+        tmp_polygon = tmp_polygon.difference(tmp_thing)
+        params.clear()
+    plt.show()
+    return flag

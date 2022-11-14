@@ -1,10 +1,10 @@
 from intelligent_placer_lib.loading import load_image_from_path
 from intelligent_placer_lib.recognizing import get_things_contours, get_polygon_contour
 from intelligent_placer_lib.preprocessing import get_paper_line
-from intelligent_placer_lib.algorithm import the_best_algorithm_in_the_world
+from intelligent_placer_lib.algorithm import just_an_algorithm
 
 
-def check_image(image_path):
+def check_image(image_path : str) -> bool:
     min_height = 5
     min_width= 0 
 
@@ -16,5 +16,5 @@ def check_image(image_path):
     
     polygon_contour = get_polygon_contour(polygon_image)
     things_contours = get_things_contours(things_image)
-    result = the_best_algorithm_in_the_world(polygon_contour, things_contours)
+    result = just_an_algorithm(polygon_contour, things_contours)
     return result
