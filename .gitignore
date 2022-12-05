@@ -130,8 +130,15 @@ dmypy.json
 
 .idea/
 
-fashion_images.npy
-fashion_labels.npy
-test_fashion_images.npy
-val_fashion_images.npy
-val_fashion_labels.npy
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
+# Local History for Visual Studio Code
+.history/
+
+# Built Visual Studio Code Extensions
+*.vsix

@@ -1,0 +1,8 @@
+matplotlib==3.6.2
+numpy==1.23.4
+opencv_python==4.6.0.66
+pandas==1.5.1
+scikit_image==0.19.3
+scipy==1.9.3
+Shapely==1.8.5.post1
+skimage==0.0
